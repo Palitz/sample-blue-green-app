@@ -1,10 +1,10 @@
-pipelpipeline {
+pipeline {
     agent any // Run on any available agent configured with kubectl, docker
 
     environment {
         DOCKER_HUB_CREDS_ID = 'dockerhub-credentials' // ID of credentials stored in Jenkins
         // *** CHANGE THIS line with your Docker Hub username ***
-        DOCKER_HUB_USER   = 'jt3309'
+        DOCKER_HUB_USER   = 'yourdockerhubusername'
         APP_NAME          = 'myapp'
         KUBECONFIG_PATH   = '/var/lib/jenkins/.kube/config' // Path where Ansible put kubeconfig
     }
@@ -23,11 +23,9 @@ pipelpipeline {
                     } else {
                        echo "WARN: Could not determine current live color from service selector or selector invalid ('${current_color_output}'). Defaulting to 'blue' as live."
                        env.CURRENT_LIVE_COLOR = 'blue'
-                       // Optional: Try to patch service to blue here if it's messed up? Risky.
                     }
 
                     env.NEXT_DEPLOY_COLOR = (env.CURRENT_LIVE_COLOR == 'blue') ? 'green' : 'blue'
-                    // Ensure BUILD_NUMBER is treated as a string for concatenation if needed, though usually fine
                     env.IMAGE_TAG = "${env.DOCKER_HUB_USER}/${env.APP_NAME}:${env.BUILD_NUMBER}-${env.NEXT_DEPLOY_COLOR}"
 
                     echo "Current live color: ${env.CURRENT_LIVE_COLOR}"
@@ -40,7 +38,6 @@ pipelpipeline {
         stage('Build Docker Image') {
             steps {
                 echo "Building Docker image: ${env.IMAGE_TAG}"
-                // Ensure Docker build context is the workspace root
                 sh 'docker build -t ${IMAGE_TAG} .'
             }
         }
@@ -48,10 +45,7 @@ pipelpipeline {
         stage('Push Image to Docker Hub') {
             steps {
                 echo "Logging into Docker Hub..."
-                // *** CORRECTED withCredentials block ***
                 withCredentials([usernamePassword(credentialsId: env.DOCKER_HUB_CREDS_ID, usernameVariable: 'DOCKER_USER_VAR', passwordVariable: 'DOCKER_PASS_VAR')]) {
-                    // Use the specific password variable from usernamePassword
-                    // Use DOCKER_HUB_USER from environment for the username (-u flag)
                     sh "echo $DOCKER_PASS_VAR | docker login -u ${env.DOCKER_HUB_USER} --password-stdin"
                 }
                 echo "Pushing Docker image: ${env.IMAGE_TAG}"
@@ -71,10 +65,9 @@ pipelpipeline {
                     def deployment_exists = sh(script: "kubectl ${kubeconfig} get deployment ${env.APP_NAME}-${env.NEXT_DEPLOY_COLOR} --ignore-not-found", returnStatus: true) == 0
                     if (!deployment_exists) {
                        echo "Deployment ${env.APP_NAME}-${env.NEXT_DEPLOY_COLOR} not found, applying YAML from k8s/deployment-${env.NEXT_DEPLOY_COLOR}.yaml"
-                       // This apply might fail image pull initially if placeholder image is invalid,
-                       // but the deployment object gets created.
-                       sh "kubectl ${kubeconfig} apply -f k8s/deployment-${env.NEXT_DEPLOY_COLOR}.yaml || true" # Ignore initial apply error
-                       sleep 10 # Give deployment object time to stabilize before setting image
+                       // Run the apply command, ignore errors with || true, comment moved outside
+                       sh "kubectl ${kubeconfig} apply -f k8s/deployment-${env.NEXT_DEPLOY_COLOR}.yaml || true" // Ignore initial apply error
+                       sleep 10 // Give deployment object time to stabilize before setting image
                     }
 
                     // Set the image on the specific deployment for the inactive color
@@ -102,7 +95,6 @@ pipelpipeline {
                      def kubeconfig = "--kubeconfig=${env.KUBECONFIG_PATH}"
                      echo "Switching service selector to color=${env.NEXT_DEPLOY_COLOR}"
                      // Patch the service to change the selector label
-                     // Ensure quotes are properly escaped for the shell command within Groovy
                      def patch_cmd = "kubectl ${kubeconfig} patch service ${env.APP_NAME}-service -p '{\\\"spec\\\":{\\\"selector\\\":{\\\"color\\\":\\\"${env.NEXT_DEPLOY_COLOR}\\\"}}}'"
                      echo "Running patch command: ${patch_cmd}"
                      sh patch_cmd
@@ -115,7 +107,6 @@ pipelpipeline {
     post {
         always {
             echo 'Pipeline finished.'
-            // Clean up docker login credentials if login succeeded
             echo 'Logging out from Docker Hub'
             sh 'docker logout || true' // Ignore error if already logged out
         }
@@ -124,8 +115,6 @@ pipelpipeline {
         }
         failure {
             echo 'Pipeline failed!'
-            // Add notifications or manual rollback instructions here
-            // Note: CURRENT_LIVE_COLOR variable might not be accurately reflecting the state *before* failure if failure happened during switch
             echo "Consider manual check/rollback if needed."
             // echo "To rollback (if needed): kubectl patch service ${env.APP_NAME}-service -p '{\\\"spec\\\":{\\\"selector\\\":{\\\"color\\\":\\\"${env.CURRENT_LIVE_COLOR}\\\"}}}'"
         }
