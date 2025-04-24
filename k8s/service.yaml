@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: myapp-service
+spec:
+  type: NodePort # Use NodePort for lab access
+  ports:
+    - port: 80 # Service port within cluster
+      targetPort: 8080 # Container port
+      # nodePort: 30080 # Optionally specify, otherwise one is chosen
+  selector:
+    app: myapp
+    color: blue # Start with traffic to blue

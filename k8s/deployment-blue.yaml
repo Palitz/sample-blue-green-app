@@ -1,0 +1,31 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: myapp-blue
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: myapp
+      color: blue
+  template:
+    metadata:
+      labels:
+        app: myapp
+        color: blue
+    spec:
+      containers:
+      - name: myapp
+        # CHANGE THIS line with your Docker Hub username
+        image: jt3309/myapp:initial-blue
+        ports:
+        - containerPort: 8080
+        env:
+          - name: APP_VERSION
+            value: "v1.0 (Blue Initial)"
+          - name: DEPLOY_COLOR # Pass color to app
+            value: "blue"
+          - name: POD_NAME
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.name
