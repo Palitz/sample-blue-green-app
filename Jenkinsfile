@@ -4,7 +4,7 @@ pipeline {
     environment {
         DOCKER_HUB_CREDS_ID = 'dockerhub-credentials' // ID of credentials stored in Jenkins
         // *** CHANGE THIS line with your Docker Hub username ***
-        DOCKER_HUB_USER   = 'yourdockerhubusername'
+        DOCKER_HUB_USER   = 'jt3309'
         APP_NAME          = 'myapp'
         KUBECONFIG_PATH   = '/var/lib/jenkins/.kube/config' // Path where Ansible put kubeconfig
     }
